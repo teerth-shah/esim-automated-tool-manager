@@ -1,0 +1,58 @@
+{
+    "python": {
+        "display_name": "Python",
+        "command": "python",
+        "version_command": ["python", "--version"],
+        "required_version": "3.8.0",
+        "platforms": ["windows", "linux"],
+        "installer": {
+            "windows": {
+                "type": "manual",
+                "url": "https://www.python.org/downloads/",
+                "instructions": "Download Python from python.org. Ensure 'Add Python to PATH' is checked."
+            }
+        }
+    },
+    "gcc": {
+        "display_name": "GCC",
+        "command": "gcc",
+        "version_command": ["gcc", "--version"],
+        "required_version": "6.3.0",
+        "platforms": ["windows", "linux"],
+        "installer": {
+            "windows": {
+                "type": "manual",
+                "url": "https://sourceforge.net/projects/mingw/",
+                "instructions": "Download MinGW and install. Add the bin directory to your PATH."
+            }
+        }
+    },
+    "ngspice": {
+        "display_name": "Ngspice",
+        "command": "ngspice",
+        "version_command": ["ngspice", "-v"],
+        "required_version": "44",
+        "platforms": ["windows", "linux"],
+        "installer": {
+            "windows": {
+                "type": "manual",
+                "url": "https://sourceforge.net/projects/ngspice/files/",
+                "instructions": "Download Ngspice and extract to C:\\Spice64. Add C:\\Spice64\\bin to PATH."
+            }
+        }
+    },
+    "kicad": {
+        "display_name": "KiCad",
+        "command": "kicad-cli",
+        "version_command": ["kicad-cli", "version", "--format", "plain"],
+        "required_version": "9.0.0",
+        "platforms": ["windows", "linux"],
+        "installer": {
+            "windows": {
+                "type": "winget",
+                "winget_id": "KiCad.KiCad",
+                "instructions": "Install via Windows Package Manager (winget)."
+            }
+        }
+    }
+}
