@@ -1,86 +1,65 @@
 # eSim Automated Tool Manager - Design Document
 
 ## 1. Introduction
-eSim is an open-source EDA tool for circuit design, simulation, analysis, and PCB design. It relies on external tools and libraries (e.g., Ngspice, KiCad). Manually managing these tools, ensuring they are installed, compatible, and up-to-date, is challenging. The Automated Tool Manager is a standalone Python utility designed to automate this process.
+eSim is an open-source EDA tool for circuit design, simulation, analysis, and PCB design. It integrates several external tools and libraries (such as Ngspice and KiCad) to provide a seamless environment for engineers. This project is a standalone utility designed to automate the management of these external dependencies.
 
 ## 2. Problem Statement
-Users often encounter issues where required external tools are missing, outdated, or installed in non-standard locations, causing eSim to fail. The lack of an automated way to detect, verify, and install these tools creates a high barrier to entry and ongoing maintenance friction.
+Managing eSim's external tools manually is tedious and error-prone. Users frequently encounter issues with compatibility, path configuration, and missing dependencies, which can cause the main eSim software to fail. There is a need for an automated system that handles installation, updates, and configuration checks with minimal manual intervention.
 
 ## 3. Objectives
-- Provide a unified interface to manage eSim dependencies.
-- Automatically detect installed tools and their locations.
-- Verify installed tool versions against known-good or required versions.
-- Automate the installation of missing tools using system-native package managers where possible.
-- Provide a robust, configurable, and extensible platform that does not require modifying code to support new tools.
+*   Provide a unified interface to manage eSim dependencies.
+*   Automatically detect installed tools and their locations on the system.
+*   Check installed tool versions against known required versions.
+*   Automate the installation of missing tools safely.
+*   Verify tools post-installation to ensure they function correctly.
 
-## 4. Functional Requirements
-- **Detection**: The system must verify if required executables exist on the system PATH or common installation directories.
-- **Version Checking**: The system must execute tools to retrieve their version and compare it mathematically/lexicographically against a requirement.
-- **Installation**: The system must be capable of installing missing tools (e.g., via `winget` on Windows).
-- **Configuration**: Tool definitions must reside in an external JSON configuration file.
-- **User Interface**: A simple command-line interface (CLI) menu system.
+## 4. Proposed Solution
+The proposed solution is a modular, Python-based Command Line Interface (CLI) application. It is entirely data-driven, using a central JSON configuration file (`tools.json`) to define tool metadata. This ensures the application can scale to support new tools in the future without requiring core code changes.
 
-## 5. Non-functional Requirements
-- **Compatibility**: Windows-first approach, with an architecture that allows for Linux/macOS support.
-- **Dependencies**: Built entirely on the Python Standard Library to ensure easy deployment. No `pip install` required for core features.
-- **Reliability**: Graceful error handling; the application must not crash due to missing tools or malformed configurations.
-- **Security**: No arbitrary command execution. Safe `subprocess` usage without `shell=True`.
+## 5. System Architecture
+The application uses a layered architecture to separate concerns:
+*   **Presentation Layer**: The CLI menu system that interacts with the user.
+*   **Business Logic Layer**: A suite of independent modules handling detection, version comparison, installation, and verification.
+*   **Data Layer**: Configuration management parsing the JSON tool registry.
 
-## 6. System Architecture
-The application uses a modular, layered architecture.
-1.  **Presentation Layer**: `main.py` (CLI Menu and display logic).
-2.  **Business Logic Layer**: The `tool_manager/` package (`detector`, `version_checker`, `installer`).
-3.  **Data Layer**: `config.py` and `tools.json`.
+## 6. Module Description
+The core logic is divided into the following specialized modules:
 
-## 7. Configuration Design
-Configuration is centralized in `config/tools.json`. This allows the tool manager to be entirely data-driven.
+*   **Detector (`detector.py`)**: Responsible for locating tool executables on the system. It primarily utilizes the system PATH (via `shutil.which`) but can fallback to specific candidate paths defined in the configuration.
+*   **Version Checker (`version_checker.py`)**: Executes tools via secure subprocess calls, captures standard output and error streams, and extracts semantic version strings using regular expressions. It converts these strings into integer tuples for safe mathematical comparison.
+*   **Installer (`installer.py`)**: Manages the installation flow. It detects the host OS, selects the appropriate installation backend (e.g., `winget` for Windows), prompts the user for confirmation, and executes the installation.
+*   **Verifier (`verifier.py`)**: Performs a deep health check on a tool. It confirms the executable exists, can be successfully invoked, and perfectly satisfies the required version constraint.
+*   **Logger (`logger.py`)**: Implements centralized logging using Python's built-in `logging` module, writing audit trails to `logs/tool_manager.log` for debugging and transparency.
+*   **Configuration (`config.py`)**: Loads, parses, and validates the `tools.json` registry. It handles missing or malformed JSON files gracefully to prevent application crashes.
 
-```json
-{
-    "ngspice": {
-        "name": "Ngspice",
-        "executable": "ngspice",
-        "version_command": ["ngspice", "--version"],
-        "required_version": "44",
-        "installer": {
-            "windows": { "type": "winget", "winget_id": "Ngspice.Ngspice" }
-        }
-    }
-}
-```
-This design separates *what* tools need to be managed from *how* the manager works.
+## 7. Workflow
+1.  **Initialization**: The application starts, initializes the logger, and parses `tools.json`.
+2.  **User Interaction**: The user is presented with a 1-7 menu options (Check Tools, Check Versions, Install Tool, etc.).
+3.  **Routing**: The user's choice routes to the appropriate module (e.g., Option 3 routes to the Installer).
+4.  **Execution**: The module performs system-level checks (finding files, running subprocesses).
+5.  **Output**: The module returns structured data classes back to the main UI, which formats them into clean ASCII tables or reports for the user.
 
-## 8. Tool Detection Flow
-1. `detector.py` receives a tool configuration.
-2. It attempts `shutil.which(executable)` to find the tool on the system PATH.
-3. If not found, it iterates through optional `additional_paths` defined in the JSON.
-4. Returns a `DetectionResult` object containing the status and resolved path.
+## 8. Technologies Used
+*   **Language**: Python 3.8+
+*   **Libraries**: Python Standard Library only (`subprocess`, `shutil`, `json`, `pathlib`, `logging`, `unittest`). No external dependencies are required for the core application, ensuring maximum portability.
+*   **Data Format**: JSON for tool registry.
+*   **Package Managers**: Integrates with `winget` (Windows Package Manager).
 
-## 9. Version Checking Flow
-1. `version_checker.py` calls the detector to ensure the tool exists and to get its exact path.
-2. It runs `subprocess.run(version_command)` with a timeout.
-3. Both `stdout` and `stderr` are combined and scanned using a regular expression (`version_pattern`) to extract the version string.
-4. The extracted string is parsed into an integer tuple (e.g., `(8, 1, 0)`) for safe mathematical comparison against the `required_version`.
+## 9. Implementation
+The project is implemented with strict modularity. Data models (`DetectionResult`, `VersionResult`, `InstallResult`, `VerificationResult`) are used to pass information between modules reliably, avoiding the use of unstructured dictionaries. The CLI is kept completely separate from the system interaction logic.
 
-## 10. Installation Flow
-1. `installer.py` checks if the tool is already installed.
-2. It determines the correct installation method based on the current OS and the tool's config.
-3. The user is prompted for confirmation.
-4. The installation subprocess is executed (e.g., `winget install --id ...`).
-5. A post-installation verification (detection + version check) is run automatically to confirm success.
+## 10. Testing
+The application uses the built-in `unittest` framework. Tests are designed to mock system calls (like `shutil.which` or `subprocess.run`) to verify the internal logic, version comparison algorithms, and configuration validation without actually modifying the host operating system.
 
-## 11. Security Considerations
-- **Command Injection**: `subprocess` is used with a list of arguments, avoiding shell interpolation.
-- **User Confirmation**: No system modifications (installations) happen without explicit user confirmation.
-- **Downloads**: Automated downloading of arbitrary binaries is avoided in favor of trusted package managers (`winget`, `apt`) or manual download instructions.
+## 11. Limitations
+*   **OS Dependency**: Automated installation is currently optimized and tested for Windows using `winget`. Linux `apt` commands are structured but untested.
+*   **Output Parsing**: Version checking relies on parsing console output. If a tool radically changes its output format in a future update, the regex patterns in the JSON configuration will need to be updated.
+*   **Privileges**: The tool cannot automatically elevate its own privileges. If `winget` requires Administrator access, the user must approve the native Windows UAC prompt manually.
 
-## 12. Testing Strategy
-Unit tests utilizing Python's `unittest` and `unittest.mock` libraries.
-- Tests verify logic (version comparison, JSON parsing, error handling) without interacting with the actual operating system state or executing real installers.
+## 12. Future Improvements
+*   **Graphical User Interface (GUI)**: Implement a frontend using `tkinter` or `PyQt` for users who prefer visual management over a CLI.
+*   **Dependency Resolution**: Add capability in the JSON config to declare that Tool A depends on Tool B, ensuring they install in the correct order.
+*   **Cross-Platform Expansion**: Full verification and testing of the Linux/macOS installation backends.
 
-## 13. Limitations & Future Improvements
-- **Limitations**: Currently relies heavily on standard output parsing, which can break if a tool fundamentally changes how it prints its version.
-- **Future Improvements**:
-    - Add native support for Linux package managers (apt, dnf) and macOS (Homebrew).
-    - Add a graphical user interface (GUI) using `tkinter` or `PyQt`.
-    - Allow configuring alternative installation paths.
+## 13. Conclusion
+The eSim Automated Tool Manager successfully fulfills the requirements of automating the discovery, verification, and installation of external dependencies. By maintaining a clean architecture and relying strictly on the Python Standard Library, it provides a lightweight, resilient, and extensible solution for eSim users.
